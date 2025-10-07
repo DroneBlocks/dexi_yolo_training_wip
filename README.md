@@ -280,6 +280,103 @@ python3 compare_experiments.py
 
 This will show the performance improvement from adding real drone photos!
 
+## Windows + NVIDIA GPU Setup
+
+### Prerequisites
+
+- Windows PC with NVIDIA GPU (CUDA support)
+- CUDA drivers installed (run `nvidia-smi` to verify)
+- Python 3.8 or higher
+- Git installed
+
+### Step 1: Clone Repository
+
+```bash
+git clone https://github.com/DroneBlocks/dexi_yolo_training_wip.git
+cd dexi_yolo_training_wip
+```
+
+### Step 2: Setup Virtual Environment with GPU Support
+
+```bash
+# Create virtual environment
+python -m venv venv_gpu
+
+# Activate it (Windows)
+venv_gpu\Scripts\activate
+
+# Upgrade pip
+python -m pip install --upgrade pip
+```
+
+### Step 3: Install PyTorch with CUDA Support
+
+**Important**: Install PyTorch with CUDA FIRST:
+
+```bash
+pip install torch==2.8.0+cu129 torchvision==0.23.0+cu129 --index-url https://download.pytorch.org/whl/cu129
+```
+
+### Step 4: Install Requirements
+
+```bash
+pip install -r requirements-gpu.txt
+```
+
+### Step 5: Verify GPU Setup
+
+```bash
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+```
+
+Expected output:
+```
+CUDA available: True
+CUDA device: NVIDIA GeForce RTX [your GPU model]
+```
+
+### Step 6: Run Complete Workflow on GPU
+
+```bash
+# 1. Generate augmented dataset
+python augment_dataset.py
+
+# 2. Train baseline (augmented data only) on GPU
+python train_baseline_augmented.py --epochs 50 --device cuda
+
+# 3. Train with real data on GPU
+python train_with_real_data.py --epochs 50 --device cuda
+
+# 4. Compare results
+python compare_experiments.py
+```
+
+### GPU Training Tips
+
+- **Monitor GPU usage**: Run `nvidia-smi` in another terminal during training
+- **Batch size**: Increase to 16 or 32 for faster training on GPU (default is 8)
+  ```bash
+  python train_baseline_augmented.py --epochs 50 --device cuda --batch 16
+  ```
+- **Training time**: GPU training is 5-10x faster than CPU
+  - 50 epochs typically takes 10-20 minutes on RTX 3060 or better
+- **Multiple GPUs**: If you have multiple GPUs, PyTorch will use GPU 0 by default
+
+### Troubleshooting
+
+**"CUDA not available" error:**
+1. Verify CUDA drivers: `nvidia-smi`
+2. Check PyTorch installation: `pip show torch` (should show `+cu129`, not `+cpu`)
+3. Reinstall PyTorch:
+   ```bash
+   pip uninstall torch torchvision -y
+   pip install torch==2.8.0+cu129 torchvision==0.23.0+cu129 --index-url https://download.pytorch.org/whl/cu129
+   ```
+
+**Version conflicts:**
+- Always install PyTorch with CUDA first, then other packages
+- Use a fresh virtual environment if issues persist
+
 ## Current Status
 
 1. ✅ Real drone photos collected (259 images: 107 cats, 152 dogs)
