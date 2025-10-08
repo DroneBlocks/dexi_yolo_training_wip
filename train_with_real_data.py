@@ -61,10 +61,10 @@ def create_combined_dataset():
     print("\n📦 Creating combined dataset...")
     print("   Copying augmented images...")
 
-    aug_train_img = Path('../train/images')
-    aug_train_lbl = Path('../train/labels')
-    aug_val_img = Path('../val/images')
-    aug_val_lbl = Path('../val/labels')
+    aug_train_img = Path('train/images')
+    aug_train_lbl = Path('train/labels')
+    aug_val_img = Path('val/images')
+    aug_val_lbl = Path('val/labels')
 
     # Copy training images/labels
     if aug_train_img.exists():
