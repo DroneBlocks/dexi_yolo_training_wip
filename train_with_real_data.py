@@ -190,7 +190,7 @@ def train_with_real_data(model_size='n', epochs=50, batch_size=4, device='mps'):
         results = model.train(
             data=str(config_file),
             epochs=epochs,
-            imgsz=640,
+            imgsz=320,
             batch=batch_size,
             device=device,
             project='results',
