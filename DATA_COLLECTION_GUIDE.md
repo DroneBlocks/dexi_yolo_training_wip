@@ -96,7 +96,7 @@ source_data/real_drone_photos/
 
 ## Next Steps
 After collection:
-1. Label images using interactive_label_tool.py
-2. Run baseline experiment (augmented data only)
-3. Run fine-tuning experiment (augmented + real data)
-4. Compare results
+1. Label images using `label_images.py`
+2. Train model with combined dataset: `python train_with_real_data.py`
+3. Validate predictions on real drone photos
+4. Iterate based on failure cases

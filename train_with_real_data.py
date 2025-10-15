@@ -32,7 +32,9 @@ def create_combined_dataset():
     for cls in classes:
         cls_dir = real_photos_dir / cls / 'images'
         if cls_dir.exists():
-            count = len(list(cls_dir.glob('*.jpg'))) + len(list(cls_dir.glob('*.JPG')))
+            # Use set to avoid duplicates on case-insensitive filesystems
+            photos = set(cls_dir.glob('*.[jJ][pP][gG]'))
+            count = len(photos)
             real_photo_counts[cls] = count
             print(f"   {cls}: {count} photos")
         else:
@@ -80,7 +82,7 @@ def create_combined_dataset():
         for lbl in aug_val_lbl.glob('*.txt'):
             shutil.copy(lbl, combined_val_lbl / lbl.name)
 
-    print("   Adding real drone photos to training set...")
+    print("   Splitting real drone photos into train/val sets (80/20)...")
 
     # Class to ID mapping (must match dataset.yaml)
     class_to_id = {
@@ -93,7 +95,13 @@ def create_combined_dataset():
     }
 
     # Copy real photos with labels (standard YOLO structure)
-    real_added = 0
+    # Split 80% train, 20% val
+    import random
+    random.seed(42)  # For reproducibility
+
+    real_train_added = 0
+    real_val_added = 0
+
     for cls in classes:
         cls_dir = real_photos_dir / cls
         if not cls_dir.exists():
@@ -109,20 +117,46 @@ def create_combined_dataset():
             print(f"   Warning: {cls}/images/ not found, skipping")
             continue
 
-        for img in list(cls_images.glob('*.jpg')) + list(cls_images.glob('*.JPG')):
-            # Copy image
+        # Get all images (avoiding duplicates on case-insensitive filesystems)
+        all_images = list(set(cls_images.glob('*.[jJ][pP][gG]')))
+
+        # Only include images that have labels
+        labeled_images = []
+        for img in all_images:
+            label_file = cls_labels / f"{img.stem}.txt"
+            if label_file.exists():
+                labeled_images.append(img)
+
+        if not labeled_images:
+            print(f"   Warning: No labeled images for {cls}, skipping")
+            continue
+
+        # Shuffle and split 80/20
+        random.shuffle(labeled_images)
+        split_idx = int(len(labeled_images) * 0.8)
+        train_images = labeled_images[:split_idx]
+        val_images = labeled_images[split_idx:]
+
+        # Copy training images
+        for img in train_images:
             new_name = f"{cls}_real_{img.stem}.jpg"
             shutil.copy(img, combined_train_img / new_name)
 
-            # Copy corresponding label if it exists
             label_file = cls_labels / f"{img.stem}.txt"
-            if label_file.exists():
-                shutil.copy(label_file, combined_train_lbl / f"{cls}_real_{img.stem}.txt")
-                real_added += 1
-            else:
-                print(f"   Warning: No label for {img.name}, skipping")
+            shutil.copy(label_file, combined_train_lbl / f"{cls}_real_{img.stem}.txt")
+            real_train_added += 1
 
-    print(f"   Added {real_added} real drone photos to training set")
+        # Copy validation images
+        for img in val_images:
+            new_name = f"{cls}_real_{img.stem}.jpg"
+            shutil.copy(img, combined_val_img / new_name)
+
+            label_file = cls_labels / f"{img.stem}.txt"
+            shutil.copy(label_file, combined_val_lbl / f"{cls}_real_{img.stem}.txt")
+            real_val_added += 1
+
+    print(f"   Added {real_train_added} real photos to training set")
+    print(f"   Added {real_val_added} real photos to validation set")
 
     # Create dataset config
     config = {
@@ -149,8 +183,8 @@ def create_combined_dataset():
     val_count = len(list(combined_val_img.glob('*.jpg')))
 
     print(f"\n✅ Combined dataset created!")
-    print(f"   Training images: {train_count} (augmented + {real_added} real)")
-    print(f"   Validation images: {val_count}")
+    print(f"   Training images: {train_count} (augmented + {real_train_added} real)")
+    print(f"   Validation images: {val_count} (augmented + {real_val_added} real)")
     print(f"   Config: {config_file}")
 
     return config_file
@@ -261,9 +295,13 @@ def train_with_real_data(model_size='n', epochs=50, batch_size=4, device='mps'):
 
         print(f"\n💾 Metrics saved: {metrics_file}")
         print("\n" + "="*60)
-        print("NEXT STEP: Compare results")
+        print("NEXT STEP: Validate on real drone photos")
         print("="*60)
-        print("Run: python3 compare_experiments.py")
+        print("Run predictions to test your model:")
+        print("  yolo predict model=results/with_real_data/weights/best.pt \\")
+        print("    source=source_data/real_drone_photos/<class>/images \\")
+        print("    conf=0.25 save=True")
+        print("\nThen iterate based on failure cases!")
         print("="*60 + "\n")
 
         return model, results

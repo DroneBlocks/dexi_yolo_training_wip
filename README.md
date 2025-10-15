@@ -256,8 +256,8 @@ During training, you'll see these key metrics:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/DroneBlocks/dexi_yolo_training_wip.git
-cd dexi_yolo_training_wip
+git clone https://github.com/DroneBlocks/dexi_yolo_training.git
+cd dexi_yolo_training
 
 # 2. Create virtual environment
 python -m venv venv_gpu
