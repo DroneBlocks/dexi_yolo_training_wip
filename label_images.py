@@ -4,8 +4,9 @@ Interactive labeling tool for YOLO format labels
 Click and drag to create bounding boxes, save labels
 
 Usage:
-    python3 label_images.py source_data/raw_drone_photos/cat
-    python3 label_images.py source_data/raw_drone_photos/dog --class dog
+    python3 label_images.py source_data/raw_drone_photos/cat      # auto-detects 'cat'
+    python3 label_images.py source_data/raw_drone_photos/dog      # auto-detects 'dog'
+    python3 label_images.py some/other/path --class bird          # specify class manually
 """
 
 import cv2
@@ -49,13 +50,29 @@ class InteractiveLabelTool:
         self.class_names = ['car', 'motorcycle', 'truck', 'bird', 'cat', 'dog']
 
         # Set default class based on directory name or argument
-        dir_name = self.images_dir.name.lower()
-        self.current_class = 5  # Default to dog
+        # Check the class directory name (parent of images/), not "images" itself
+        dir_name = self.class_dir.name.lower()
+        self.current_class = None
 
+        # First try to auto-detect from directory name
         for idx, name in enumerate(self.class_names):
-            if name in dir_name or name == default_class.lower():
+            if name in dir_name:
                 self.current_class = idx
+                print(f"🔍 Auto-detected class from directory: {name}")
                 break
+
+        # If not found in directory name, use the --class argument
+        if self.current_class is None:
+            for idx, name in enumerate(self.class_names):
+                if name == default_class.lower():
+                    self.current_class = idx
+                    print(f"📝 Using class from --class argument: {name}")
+                    break
+
+        # Fallback to dog if still not set
+        if self.current_class is None:
+            self.current_class = 5  # dog
+            print(f"⚠️  No class detected, defaulting to: dog")
 
         print(f"\n{'='*70}")
         print(f"Interactive YOLO Labeler")
@@ -276,9 +293,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Auto-detect class from directory name:
   python3 label_images.py source_data/raw_drone_photos/cat
-  python3 label_images.py source_data/raw_drone_photos/dog --class dog
-  python3 label_images.py source_data/raw_drone_photos/bird --class bird
+  python3 label_images.py source_data/raw_drone_photos/dog
+  python3 label_images.py source_data/raw_drone_photos/bird
+
+  # Or specify class manually with --class:
+  python3 label_images.py some/other/path --class bird
+  python3 label_images.py my_images --class motorcycle
 
 Controls:
   Click and drag to draw bounding box
@@ -292,7 +314,7 @@ Controls:
                        help='Directory containing images to label')
     parser.add_argument('--class', '-c', dest='default_class', type=str, default='dog',
                        choices=['car', 'motorcycle', 'truck', 'bird', 'cat', 'dog'],
-                       help='Default class for labeling (default: dog)')
+                       help='Class to label (auto-detected from directory name if not specified)')
 
     args = parser.parse_args()
 
@@ -301,8 +323,15 @@ Controls:
         labeler.run()
     except FileNotFoundError as e:
         print(f"\n❌ Error: {e}")
-        print(f"\nUsage: python3 label_images.py <directory>")
-        print(f"Example: python3 label_images.py source_data/raw_drone_photos/cat\n")
+        print(f"\nUsage: python3 label_images.py <class_directory>")
+        print(f"\n⚠️  Important: Provide the CLASS directory, not the images/ subdirectory")
+        print(f"\nCorrect examples:")
+        print(f"  ✅ python3 label_images.py source_data/raw_drone_photos/cat")
+        print(f"  ✅ python3 label_images.py source_data/raw_drone_photos/bird")
+        print(f"\nIncorrect examples:")
+        print(f"  ❌ python3 label_images.py source_data/raw_drone_photos/cat/images")
+        print(f"  ❌ python3 label_images.py source_data/raw_drone_photos/bird/images")
+        print(f"\nThe script automatically looks for images/ and labels/ inside the directory you provide.\n")
         return 1
     except Exception as e:
         print(f"\n❌ Error: {e}")

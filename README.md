@@ -1,177 +1,165 @@
-# Drone Domain Adaptation Experiments
+# Drone Object Detection Training
 
-**Objective**: Demonstrate the value of real-world data collection for fine-tuning YOLOv8 to detect objects from drone cameras.
+**Objective**: Train YOLOv8 to detect objects from drone cameras using a blend of augmented and real-world data.
 
-**Status**: Self-contained repository with all scripts and data for running the complete experiment.
+**Status**: Self-contained repository with all scripts and data for running complete training workflow.
 
 ## Problem Statement
 
-Your drone can detect printed images when held up to the camera, but struggles when images are placed in recessed buildings. This is a **domain gap problem** - augmented COCO images don't capture the real-world conditions of drone-view detection.
+Your drone can detect printed images when held close to the camera, but struggles when images are placed in recessed buildings. This is a **domain gap problem** - pretrained models don't fully capture the real-world conditions of drone-view detection (perspective, lighting, shadows, distance).
 
-## Solution: Fine-tuning vs Transfer Learning
+## Solution: Blending Augmented and Real Data
 
-This is a **fine-tuning** problem, not transfer learning:
+This project uses **fine-tuning** with a hybrid dataset:
 - Your 6 classes (bird, car, cat, dog, motorcycle, truck) exist in COCO
-- You're adapting pretrained weights to a new **domain** (drone-view, recessed buildings)
-- Strategy: Start with `yolov8n.pt` and continue training on your specific data
+- Start with `yolov8n.pt` pretrained weights
+- Train on **both augmented COCO images** and **real drone photos**
 
-## Experiment Design
+### Why Blend Data?
 
-### Experiment 1: Baseline (Augmented Data Only)
-- Train on augmented COCO images
-- Establishes baseline performance
-- Shows limits of synthetic augmentation
+**Augmented Data Benefits:**
+- Large quantity (hundreds of images per class)
+- Diverse object appearances and backgrounds
+- Provides strong foundation for object recognition
 
-### Experiment 2: Fine-tuned (Augmented + Real Drone Data)
-- Train on augmented + real drone photos (30-50 per class)
-- Demonstrates value of domain-specific data
-- Expected to significantly outperform baseline
+**Real Drone Data Benefits:**
+- Captures deployment conditions (drone perspective, recessed buildings)
+- Real-world lighting, shadows, and environmental factors
+- Addresses domain-specific edge cases
 
-### Expected Outcome
-Real drone data should improve mAP by 20-40%, proving that **matching training distribution to deployment conditions** is critical.
+**Combined Effect:**
+Training with both types of data allows the model to leverage general object recognition from COCO while adapting to the specific conditions of drone deployment. Just 30-50 real drone photos per class can significantly improve performance by teaching the model to handle real-world variations that augmentation cannot fully replicate.
 
-## Workflow
+## Training Workflow
 
-This repository provides a complete **domain adaptation experiment** for drone-based object detection.
+### Step 1: Generate Augmented Dataset
 
-### Complete Workflow (From Scratch)
+Create baseline augmented dataset from the 6 original images:
 
-1. **Generate augmented baseline dataset**
-   ```bash
-   python3 augment_dataset.py
-   ```
+```bash
+python3 augment_dataset.py
+```
 
-2. **Train baseline** (augmented data only)
-   ```bash
-   python3 train_baseline_augmented.py --epochs 50 --device mps
-   ```
+This creates:
+- `train/images/` - 240 augmented training images (40 per class)
+- `train/labels/` - Corresponding YOLO labels
+- `val/images/` - 240 augmented validation images (40 per class)
+- `val/labels/` - Corresponding YOLO labels
 
-3. **Collect real drone photos** (see `DATA_COLLECTION_GUIDE.md`)
-   - 30-50 photos per class
-   - Vary height, lighting, positioning
-   - Store in `source_data/raw_drone_photos/<class>/`
+### Step 2: Collect Real Drone Photos
 
-4. **Label your drone photos**
-   ```bash
-   python3 label_images.py source_data/raw_drone_photos/<class> --class <class>
-   # Labels are saved automatically in the same directory
-   # Then copy to source_data/real_drone_photos/<class>/
-   ```
+See `DATA_COLLECTION_GUIDE.md` for detailed protocol.
 
-5. **Train with real data**
-   ```bash
-   python3 train_with_real_data.py --epochs 50 --device mps
-   ```
+**Guidelines:**
+- 30-50 photos per class minimum
+- Vary height, lighting, positioning
+- Capture deployment conditions (recessed buildings, various distances)
+- Store in `source_data/raw_drone_photos/<class>/`
 
-6. **Compare results**
-   ```bash
-   python3 compare_experiments.py
-   ```
+### Step 3: Label Your Drone Photos
 
-### Current Workflow (Resume from where you are)
+```bash
+python3 label_images.py source_data/raw_drone_photos/<class> --class <class>
+# Labels are saved automatically in the same directory
+# Then copy to source_data/real_drone_photos/<class>/
+```
 
-Since you've already trained with real data, just run:
+### Step 4: Train with Combined Dataset
 
-1. **Generate augmented dataset** (if not done yet)
-   ```bash
-   python3 augment_dataset.py
-   ```
+Train on augmented + real data together:
 
-2. **Train baseline**
-   ```bash
-   python3 train_baseline_augmented.py --epochs 50 --device mps
-   ```
+```bash
+python3 train_with_real_data.py --epochs 50 --device mps
+```
 
-3. **Compare metrics**
-   ```bash
-   python3 compare_experiments.py
-   ```
+**Parameters:**
+- `--epochs`: Number of training epochs (default: 50)
+- `--device`: Device to use (`mps` for Mac, `cuda` for NVIDIA GPU, `cpu` for CPU)
+- `--batch`: Batch size (default: 8, increase to 16-32 for GPU)
 
-4. **Visual comparison on real drone photos**
+**Output:**
+- Model: `results/with_real_data/weights/best.pt`
+- Training curves: `results/with_real_data/results.png`
+- Validation metrics: Shown during training
 
-   Test both models on your real drone photos to see which performs better:
+### Step 5: Validate Your Model
 
-   ```bash
-   # Test baseline (augmented only) on real cat photos
-   yolo predict model=results/baseline_augmented/weights/best.pt \
-       source=source_data/real_drone_photos/cat/images \
-       conf=0.25 save=True project=results/predictions name=baseline_cats
+Test your trained model on real drone photos to verify performance:
 
-   # Test fine-tuned (augmented + real) on real cat photos
-   yolo predict model=results/with_real_data/weights/best.pt \
-       source=source_data/real_drone_photos/cat/images \
-       conf=0.25 save=True project=results/predictions name=finetuned_cats
+```bash
+# Test on cat photos
+yolo predict model=results/with_real_data/weights/best.pt \
+    source=source_data/real_drone_photos/cat/images \
+    conf=0.25 save=True project=results/predictions name=cats
 
-   # Test on dog photos
-   yolo predict model=results/baseline_augmented/weights/best.pt \
-       source=source_data/real_drone_photos/dog/images \
-       conf=0.25 save=True project=results/predictions name=baseline_dogs
+# Test on dog photos
+yolo predict model=results/with_real_data/weights/best.pt \
+    source=source_data/real_drone_photos/dog/images \
+    conf=0.25 save=True project=results/predictions name=dogs
+```
 
-   yolo predict model=results/with_real_data/weights/best.pt \
-       source=source_data/real_drone_photos/dog/images \
-       conf=0.25 save=True project=results/predictions name=finetuned_dogs
-   ```
+**Review outputs:**
+- Check `results/predictions/cats/` and `results/predictions/dogs/`
+- Look for missed detections or misclassifications
+- Verify confidence scores are reasonable (>0.5 for good detections)
+- Identify failure cases for additional data collection
 
-   **Compare outputs:**
-   - `results/predictions/baseline_cats/` vs `results/predictions/finetuned_cats/`
-   - `results/predictions/baseline_dogs/` vs `results/predictions/finetuned_dogs/`
+### Step 6: Iterate Based on Failure Cases
 
-   **What to look for:**
-   - Does the baseline model miss detections or misclassify objects?
-   - Does the fine-tuned model have better confidence scores?
-   - Which model handles drone perspective, lighting, and shadows better?
-   - Count false positives and false negatives for each model
-
-   This visual comparison will show the **real-world impact** of domain-specific data collection!
+1. **Identify failure cases** - Which objects are missed or misclassified?
+2. **Collect targeted data** - Gather more photos similar to failure cases
+3. **Re-label and train** - Add new photos and retrain
+4. **Validate again** - Check if failures are resolved
 
 ## Teaching Framework
 
 ### For Student Teams
 
-**Phase 1: Understanding** (Week 1)
-1. Predict: Which approach will work better?
-2. Discuss: Why does domain gap matter?
-3. Hypothesis: How much improvement will real data provide?
+**Phase 1: Understanding Domain Adaptation** (Week 1)
+1. Discuss: What is domain gap and why does it matter?
+2. Predict: Will augmented data alone work for drone detection?
+3. Hypothesis: How will real drone photos improve the model?
 
 **Phase 2: Data Collection** (Week 2)
 1. Protocol: Height variations, lighting conditions, positioning
 2. Collect: 10-20 photos per class per team
-3. Quality check: Focus, visibility, metadata
+3. Quality check: Focus, visibility, variety of conditions
+4. Pool data: Combine team photos (target 50+ per class)
 
-**Phase 3: Training & Evaluation** (Week 3)
-1. Run baseline experiment
-2. Run fine-tuned experiment
-3. Compare results
-4. Analyze: What worked? What didn't?
+**Phase 3: Training & Validation** (Week 3)
+1. Generate augmented dataset
+2. Train model with combined data
+3. Run validation predictions
+4. Analyze: What works well? What doesn't?
 
 **Phase 4: Iteration** (Week 4)
-1. Identify failure cases
-2. Collect targeted data
+1. Identify failure cases from validation
+2. Collect targeted data for failures
 3. Re-train and measure improvement
-4. Document learnings
+4. Document learnings and best practices
 
 ### Key Learning Objectives
 
 1. **Data Distribution Matching**
    - Training data must match deployment conditions
-   - Synthetic augmentation has limits
-   - Real data captures nuances (shadows, perspective, lighting)
+   - Synthetic augmentation provides volume but has limits
+   - Real data captures critical nuances (shadows, perspective, lighting)
 
 2. **Fine-tuning Strategy**
    - Leverage pretrained knowledge (COCO weights)
-   - Use lower learning rate (0.001)
-   - Combine synthetic + real data
+   - Use lower learning rate (0.001) to preserve general features
+   - Combine synthetic + real data for best of both worlds
 
 3. **Iterative Development**
-   - Measure baseline first
-   - Collect targeted data
-   - Re-train and evaluate
-   - Repeat until satisfactory
+   - Start with combined dataset
+   - Validate on real scenarios
+   - Collect targeted data for failures
+   - Repeat until satisfactory performance
 
 4. **Data Efficiency**
    - Quality > Quantity
-   - 30-50 well-chosen photos can significantly improve performance
-   - Focus on domain-specific edge cases
+   - 30-50 well-chosen photos can make significant impact
+   - Focus on domain-specific edge cases and challenging conditions
 
 ## Model Architecture: YOLOv8 vs YOLOv11
 
@@ -207,78 +195,53 @@ import onnxruntime as ort
 
 - `README.md` - This file
 - `DATA_COLLECTION_GUIDE.md` - Photo collection protocol
-- `train_baseline_augmented.py` - Baseline experiment script
-- `train_with_real_data.py` - Fine-tuning experiment script
-- `compare_experiments.py` - Results comparison script
+- `train_with_real_data.py` - Training script with combined dataset
+- `augment_dataset.py` - Generate augmented COCO images
+- `label_images.py` - Interactive labeling tool
 - `source_data/` - Data storage directory
 - `results/` - Training results and models
 
-## Expected Results
+## Understanding Training Metrics
 
-| Experiment | mAP50 | mAP50-95 | Notes |
-|------------|-------|----------|-------|
-| Baseline (augmented) | ~0.60-0.70 | ~0.40-0.50 | Synthetic data only |
-| Fine-tuned (+ real) | ~0.80-0.90 | ~0.60-0.70 | With domain data |
-| **Improvement** | **+20-30%** | **+30-50%** | Real data impact |
+During training, you'll see these key metrics:
+
+| Metric | Description | Target |
+|--------|-------------|--------|
+| mAP50 | Mean Average Precision at 50% IoU | >0.75 is good |
+| mAP50-95 | mAP averaged across IoU thresholds | >0.60 is good |
+| Precision | How many detections are correct | >0.80 |
+| Recall | How many objects are detected | >0.75 |
+
+**What good performance looks like:**
+- mAP50: 75-90%
+- mAP50-95: 60-75%
+- Consistent detection in validation images
+- High confidence scores (>0.5) on correct detections
 
 ## Troubleshooting
-
-**Q: Baseline won't run**
-- Ensure `augment_dataset.py` has been run first
-- Check that `train/images` and `val/images` exist
 
 **Q: No real photos found**
 - Check directory structure: `source_data/real_drone_photos/<class>/`
 - Ensure images are `.jpg` format
+- Verify both `images/` and `labels/` subdirectories exist
 
-**Q: Performance didn't improve**
+**Q: Performance is poor**
 - Need more real photos (aim for 50+ per class)
 - Check real photo quality (focus, visibility)
 - Verify labels are accurate
 - Ensure photos match deployment scenario (recessed buildings!)
+- Try more training epochs (100+)
 
 **Q: Training is slow**
 - Reduce batch size: `--batch 2`
-- Use smaller model: `--model n`
+- Use smaller model: `yolov8n` (nano)
 - Reduce epochs: `--epochs 30`
+- Use GPU if available (much faster!)
 
-## Quick Start
-
-### Step 1: Generate Augmented Dataset
-
-First, generate the baseline augmented dataset from the 6 original images:
-
-```bash
-python3 augment_dataset.py
-```
-
-This creates:
-- `train/images/` - 240 augmented training images (40 per class)
-- `train/labels/` - Corresponding YOLO labels
-- `val/images/` - 240 augmented validation images (40 per class)
-- `val/labels/` - Corresponding YOLO labels
-
-### Step 2: Run Baseline Experiment
-
-Train on augmented data only to establish baseline:
-
-```bash
-python3 train_baseline_augmented.py --epochs 50 --device mps
-```
-
-**Output:**
-- Model: `results/baseline_augmented/weights/best.pt`
-- Metrics: `results/baseline_augmented/metrics.json`
-
-### Step 3: Compare Results
-
-Compare baseline (augmented only) vs fine-tuned (augmented + real drone data):
-
-```bash
-python3 compare_experiments.py
-```
-
-This will show the performance improvement from adding real drone photos!
+**Q: Model works on some objects but not others**
+- Classes with fewer real photos will perform worse
+- Collect more photos for underperforming classes
+- Ensure photo variety (different lighting, angles, distances)
 
 ## Windows + NVIDIA GPU Setup
 
@@ -289,125 +252,76 @@ This will show the performance improvement from adding real drone photos!
 - Python 3.8 or higher
 - Git installed
 
-### Step 1: Clone Repository
+### Setup Instructions
 
 ```bash
+# 1. Clone repository
 git clone https://github.com/DroneBlocks/dexi_yolo_training_wip.git
 cd dexi_yolo_training_wip
-```
 
-### Step 2: Setup Virtual Environment with GPU Support
-
-```bash
-# Create virtual environment
+# 2. Create virtual environment
 python -m venv venv_gpu
-
-# Activate it (Windows)
 venv_gpu\Scripts\activate
 
-# Upgrade pip
-python -m pip install --upgrade pip
-```
-
-### Step 3: Install PyTorch with CUDA Support
-
-**Important**: Install PyTorch with CUDA FIRST:
-
-```bash
+# 3. Install PyTorch with CUDA FIRST
 pip install torch==2.8.0+cu129 torchvision==0.23.0+cu129 --index-url https://download.pytorch.org/whl/cu129
-```
 
-### Step 4: Install Requirements
-
-```bash
+# 4. Install other requirements
 pip install -r requirements-gpu.txt
+
+# 5. Verify GPU setup
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
 
-### Step 5: Verify GPU Setup
+### Training on GPU
 
 ```bash
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
-```
-
-Expected output:
-```
-CUDA available: True
-CUDA device: NVIDIA GeForce RTX [your GPU model]
-```
-
-### Step 6: Run Complete Workflow on GPU
-
-```bash
-# 1. Generate augmented dataset
+# Generate dataset
 python augment_dataset.py
 
-# 2. Train baseline (augmented data only) on GPU
-python train_baseline_augmented.py --epochs 50 --device cuda
-
-# 3. Train with real data on GPU
-python train_with_real_data.py --epochs 50 --device cuda
-
-# 4. Compare results
-python compare_experiments.py
+# Train with GPU acceleration
+python train_with_real_data.py --epochs 50 --device cuda --batch 16
 ```
 
-### GPU Training Tips
+**GPU Training Tips:**
+- Monitor usage: `nvidia-smi` in another terminal
+- Increase batch size to 16-32 for faster training
+- GPU training is 5-10x faster than CPU
+- 50 epochs typically takes 10-20 minutes on RTX 3060+
 
-- **Monitor GPU usage**: Run `nvidia-smi` in another terminal during training
-- **Batch size**: Increase to 16 or 32 for faster training on GPU (default is 8)
-  ```bash
-  python train_baseline_augmented.py --epochs 50 --device cuda --batch 16
-  ```
-- **Training time**: GPU training is 5-10x faster than CPU
-  - 50 epochs typically takes 10-20 minutes on RTX 3060 or better
-- **Multiple GPUs**: If you have multiple GPUs, PyTorch will use GPU 0 by default
+## Current Project Status
 
-### Troubleshooting
-
-**"CUDA not available" error:**
-1. Verify CUDA drivers: `nvidia-smi`
-2. Check PyTorch installation: `pip show torch` (should show `+cu129`, not `+cpu`)
-3. Reinstall PyTorch:
-   ```bash
-   pip uninstall torch torchvision -y
-   pip install torch==2.8.0+cu129 torchvision==0.23.0+cu129 --index-url https://download.pytorch.org/whl/cu129
-   ```
-
-**Version conflicts:**
-- Always install PyTorch with CUDA first, then other packages
-- Use a fresh virtual environment if issues persist
-
-## Current Status
-
-1. ✅ Real drone photos collected (259 images: 107 cats, 152 dogs)
-2. ✅ Images labeled and organized in `source_data/real_drone_photos/`
-3. ✅ Fine-tuned model trained: `results/with_real_data/weights/best.pt`
+1. ✅ Augmented dataset generated (480 images total)
+2. ✅ Real drone photos collected (259 images: 107 cats, 152 dogs)
+3. ✅ Images labeled and organized in `source_data/real_drone_photos/`
+4. ✅ Model trained with combined data: `results/with_real_data/weights/best.pt`
    - **mAP50:** 76.2%
    - **mAP50-95:** 75.2%
-   - **Cat accuracy:** 85%
-   - **Dog accuracy:** 87%
-4. ✅ Baseline model trained: `results/baseline_augmented/weights/best.pt`
-   - **mAP50:** 99.5% (on augmented validation set)
-5. ⏳ Visual comparison on real drone photos (see workflow above)
-6. ⏳ Deploy best model to Raspberry Pi
+   - **Cat precision:** 85%
+   - **Dog precision:** 87%
+5. ⏳ Validate on additional real drone scenarios
+6. ⏳ Deploy to Raspberry Pi via ONNX
 7. ⏳ Iterate based on failure cases
 
-## Optional: Label Additional Drone Photos
+## Adding More Classes
 
-If you want to add more real drone photos for other classes:
+To add real drone photos for other classes (bird, car, motorcycle, truck):
 
 ```bash
-# Label images for any class
+# 1. Collect photos for the class
+# Store in source_data/raw_drone_photos/<class_name>/
+
+# 2. Label images
 python3 label_images.py source_data/raw_drone_photos/<class_name> --class <class_name>
 
-# Copy to real_drone_photos
+# 3. Copy to training directory
 cp source_data/raw_drone_photos/<class_name>/images/* source_data/real_drone_photos/<class_name>/images/
 cp source_data/raw_drone_photos/<class_name>/labels/* source_data/real_drone_photos/<class_name>/labels/
 
-# Re-train with updated data
+# 4. Re-train with updated data
 python3 train_with_real_data.py --epochs 50 --device mps
 ```
 
 ---
 
-**Remember**: The goal is not just to improve the model, but to teach students the **systematic process** of domain adaptation through data collection.
+**Remember**: The goal is to teach students the **systematic process** of domain adaptation through strategic data collection and iterative improvement.
