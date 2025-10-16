@@ -111,56 +111,6 @@ yolo predict model=results/with_real_data/weights/best.pt \
 3. **Re-label and train** - Add new photos and retrain
 4. **Validate again** - Check if failures are resolved
 
-## Teaching Framework
-
-### For Student Teams
-
-**Phase 1: Understanding Domain Adaptation** (Week 1)
-1. Discuss: What is domain gap and why does it matter?
-2. Predict: Will augmented data alone work for drone detection?
-3. Hypothesis: How will real drone photos improve the model?
-
-**Phase 2: Data Collection** (Week 2)
-1. Protocol: Height variations, lighting conditions, positioning
-2. Collect: 10-20 photos per class per team
-3. Quality check: Focus, visibility, variety of conditions
-4. Pool data: Combine team photos (target 50+ per class)
-
-**Phase 3: Training & Validation** (Week 3)
-1. Generate augmented dataset
-2. Train model with combined data
-3. Run validation predictions
-4. Analyze: What works well? What doesn't?
-
-**Phase 4: Iteration** (Week 4)
-1. Identify failure cases from validation
-2. Collect targeted data for failures
-3. Re-train and measure improvement
-4. Document learnings and best practices
-
-### Key Learning Objectives
-
-1. **Data Distribution Matching**
-   - Training data must match deployment conditions
-   - Synthetic augmentation provides volume but has limits
-   - Real data captures critical nuances (shadows, perspective, lighting)
-
-2. **Fine-tuning Strategy**
-   - Leverage pretrained knowledge (COCO weights)
-   - Use lower learning rate (0.001) to preserve general features
-   - Combine synthetic + real data for best of both worlds
-
-3. **Iterative Development**
-   - Start with combined dataset
-   - Validate on real scenarios
-   - Collect targeted data for failures
-   - Repeat until satisfactory performance
-
-4. **Data Efficiency**
-   - Quality > Quantity
-   - 30-50 well-chosen photos can make significant impact
-   - Focus on domain-specific edge cases and challenging conditions
-
 ## Model Architecture: YOLOv8 vs YOLOv11
 
 **Recommendation: Stick with YOLOv8**
