@@ -132,7 +132,7 @@ After training:
 from ultralytics import YOLO
 
 model = YOLO('results/with_real_data/weights/best.pt')
-model.export(format='onnx', imgsz=640)
+model.export(format='onnx', imgsz=320)
 ```
 
 Use in ROS2 node:
