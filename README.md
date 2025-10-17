@@ -1,12 +1,39 @@
-# Drone Object Detection Training
+# DEXI Object Detection Training
 
-**Objective**: Train YOLOv8 to detect objects from drone cameras using a blend of augmented and real-world data.
+**Objective**: Train YOLOv8 to detect objects from DEXI's camera using a blend of augmented and real-world data.
 
 **Status**: Self-contained repository with all scripts and data for running complete training workflow.
 
+## Quick Start
+
+For users who understand the workflow and want to train quickly:
+
+```bash
+# 1. Generate augmented dataset
+python3 augment_dataset.py
+
+# 2. Collect and label real DEXI photos (30-50 per class)
+python3 label_images.py source_data/raw_drone_photos/<class> --class <class>
+
+# 3. Train with combined dataset
+python3 train_with_real_data.py --epochs 50 --device mps  # or cuda/cpu
+
+# 4. Validate predictions
+yolo predict model=results/with_real_data/weights/best.pt \
+    source=source_data/real_drone_photos/<class>/images \
+    conf=0.25 save=True
+
+# 5. Export to ONNX for deployment
+python3 -c "from ultralytics import YOLO; YOLO('results/with_real_data/weights/best.pt').export(format='onnx', imgsz=320)"
+```
+
+Read on for detailed explanations and troubleshooting.
+
+---
+
 ## Problem Statement
 
-Your drone can detect printed images when held close to the camera, but struggles when images are placed in recessed buildings. This is a **domain gap problem** - pretrained models don't fully capture the real-world conditions of drone-view detection (perspective, lighting, shadows, distance).
+DEXI can detect printed images when held close to the camera, but struggles when images are placed in recessed buildings. This is a **domain gap problem** - pretrained models don't fully capture the real-world conditions of DEXI's view (perspective, lighting, shadows, distance).
 
 ## Solution: Blending Augmented and Real Data
 
@@ -22,13 +49,13 @@ This project uses **fine-tuning** with a hybrid dataset:
 - Diverse object appearances and backgrounds
 - Provides strong foundation for object recognition
 
-**Real Drone Data Benefits:**
-- Captures deployment conditions (drone perspective, recessed buildings)
+**Real DEXI Data Benefits:**
+- Captures deployment conditions (DEXI's perspective, recessed buildings)
 - Real-world lighting, shadows, and environmental factors
 - Addresses domain-specific edge cases
 
 **Combined Effect:**
-Training with both types of data allows the model to leverage general object recognition from COCO while adapting to the specific conditions of drone deployment. Just 30-50 real drone photos per class can significantly improve performance by teaching the model to handle real-world variations that augmentation cannot fully replicate.
+Training with both types of data allows the model to leverage general object recognition from COCO while adapting to the specific conditions of DEXI deployment. Just 30-50 real DEXI photos per class can significantly improve performance by teaching the model to handle real-world variations that augmentation cannot fully replicate.
 
 ## Training Workflow
 
@@ -41,12 +68,12 @@ python3 augment_dataset.py
 ```
 
 This creates:
-- `train/images/` - 240 augmented training images (40 per class)
+- `train/images/` - Augmented training images
 - `train/labels/` - Corresponding YOLO labels
-- `val/images/` - 240 augmented validation images (40 per class)
+- `val/images/` - Augmented validation images
 - `val/labels/` - Corresponding YOLO labels
 
-### Step 2: Collect Real Drone Photos
+### Step 2: Collect Real DEXI Photos
 
 See `DATA_COLLECTION_GUIDE.md` for detailed protocol.
 
@@ -56,7 +83,7 @@ See `DATA_COLLECTION_GUIDE.md` for detailed protocol.
 - Capture deployment conditions (recessed buildings, various distances)
 - Store in `source_data/raw_drone_photos/<class>/`
 
-### Step 3: Label Your Drone Photos
+### Step 3: Label Your DEXI Photos
 
 ```bash
 python3 label_images.py source_data/raw_drone_photos/<class> --class <class>
@@ -84,7 +111,7 @@ python3 train_with_real_data.py --epochs 50 --device mps
 
 ### Step 5: Validate Your Model
 
-Test your trained model on real drone photos to verify performance:
+Test your trained model on real DEXI photos to verify performance:
 
 ```bash
 # Test on cat photos
@@ -111,31 +138,19 @@ yolo predict model=results/with_real_data/weights/best.pt \
 3. **Re-label and train** - Add new photos and retrain
 4. **Validate again** - Check if failures are resolved
 
-## Model Architecture: YOLOv8 vs YOLOv11
-
-**Recommendation: Stick with YOLOv8**
-
-Why:
-- ✅ Proven ONNX export for Raspberry Pi
-- ✅ Stable, well-documented (better for teaching)
-- ✅ Performance difference minimal for this use case
-- ✅ Focus should be on **data quality**, not architecture
-
-YOLOv11 offers marginal improvements, but your bottleneck is data, not model architecture.
-
 ## Deployment Pipeline
 
-After training:
+After training, deploy to DEXI:
 
 ```python
-# Convert to ONNX for Raspberry Pi
+# Convert to ONNX for DEXI's Raspberry Pi
 from ultralytics import YOLO
 
 model = YOLO('results/with_real_data/weights/best.pt')
 model.export(format='onnx', imgsz=320)
 ```
 
-Use in ROS2 node:
+Use in DEXI's ROS2 node:
 ```python
 import onnxruntime as ort
 # Load and run inference on Raspberry Pi
@@ -241,21 +256,17 @@ python train_with_real_data.py --epochs 50 --device cuda --batch 16
 
 ## Current Project Status
 
-1. ✅ Augmented dataset generated (480 images total)
-2. ✅ Real drone photos collected (259 images: 107 cats, 152 dogs)
-3. ✅ Images labeled and organized in `source_data/real_drone_photos/`
+1. ✅ Augmented dataset generated
+2. ✅ Real DEXI photos collected and labeled
+3. ✅ Images organized in `source_data/real_drone_photos/`
 4. ✅ Model trained with combined data: `results/with_real_data/weights/best.pt`
-   - **mAP50:** 76.2%
-   - **mAP50-95:** 75.2%
-   - **Cat precision:** 85%
-   - **Dog precision:** 87%
-5. ⏳ Validate on additional real drone scenarios
-6. ⏳ Deploy to Raspberry Pi via ONNX
+5. ⏳ Validate on additional real DEXI scenarios
+6. ⏳ Deploy to DEXI's Raspberry Pi via ONNX
 7. ⏳ Iterate based on failure cases
 
 ## Adding More Classes
 
-To add real drone photos for other classes (bird, car, motorcycle, truck):
+To add real DEXI photos for other classes (bird, car, motorcycle, truck):
 
 ```bash
 # 1. Collect photos for the class
